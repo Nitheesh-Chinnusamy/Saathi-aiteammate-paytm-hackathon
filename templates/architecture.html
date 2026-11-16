@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Saathi · Architecture</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23002E6E'/%3E%3Ctext x='16' y='22' font-size='18' font-family='Arial' font-weight='700' fill='%2300B9F1' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body style="background:var(--surface)">
+<header class="topbar">
+  <div class="brand"><span class="wordmark">Saa<b>thi</b></span><span class="tagline">Architecture · prototype vs production</span></div>
+  <div class="badges" id="badges"></div>
+  <a class="toplink" href="/">← Back to demo</a>
+</header>
+<div class="arch">
+  <h1>Resolve end to end, then prove it</h1>
+  <p class="lead">Other support bots call a ticket "resolved" when the customer goes quiet. Saathi closes a ticket only when a
+    check on the <b>system of record</b> passes. Each block below is one prototype module, with the production component it stands in for.</p>
+
+  <div class="flow" id="flow"></div>
+
+  <div class="section">
+    <h2>Around every step</h2>
+    <div class="flow" id="around"></div>
+  </div>
+
+  <div class="section">
+    <h2>MCP tools <span class="muted small" id="mcp-meta">loading tools/list from POST /mcp …</span></h2>
+    <p class="small muted">Minimal MCP-style server (initialize, tools/list, tools/call); production would use a full MCP server via the
+      official SDK in front of Paytm's systems. Read tools are scoped to the session merchant; write tools also need a valid gateway token.</p>
+    <div class="toolgrid" id="tools"></div>
+  </div>
+</div>
+<script>
+const STEPS = [
+  ["Understand", "Identity from login (never from text), masked state card via MCP, Sarvam ASR, parse + amount snap (±1% digits, ±15% number words), match against the merchant's own anomalies, broken-promise check, incident attach by data-built key with a predicate guard.",
+   "step1_understand.py · context_service.py · sarvam.py · clustering.py · anomaly_rules.py", "Paytm auth session · Sarvam Saaras (streaming) · multilingual embeddings + vector index · rules engine on the event stream", "ASR, clustering"],
+  ["Diagnose", "Lifecycle stuck-stage check, hypotheses with priors from historical cases, parallel read-only tests, Bayes update. Gemini only if confidence < 0.85 (Tier 1 'score, don't write') or the case is novel (Tier 2 tool loop, every claim cited). Runner-up challenge + cite check.",
+   "step2_diagnose.py · llm.py", "Same design; likelihood tables learned from labelled cases; self-hosted open model (prototype uses Gemini)", "Gemini only on doubt / novel"],
+  ["Safety check", "Gateway dry-run produces the exact diff; named policy rules judge it (ownership, unlinked account, credit ≤ disputed, fraud flag, auto cap, credits/30d, playbook autonomy) → ALLOW / NEEDS_APPROVAL / DENY. ALLOW issues an HMAC-scoped token (merchant, actions, max amount, 10 min).",
+   "step3_safety.py", "OPA/Rego policy engine · KMS-backed token signer", "none"],
+  ["Act", "One gateway: token verified (and re-verified by the MCP server), idempotency key = case + action, compensation registered before executing, hash-chained audit log, actions.executed event.",
+   "step4_act.py · mcp_server.py (write tools)", "Action gateway (Envoy/OPA sidecar) · immutable ledger table · Temporal saga compensations", "none"],
+  ["Contract", "A checkable promise: postcondition names (fixed Python predicates, never LLM-written), deadline = P90 historical latency + buffer (credit: 36h → 48h), on-fail ladder, promise message in the merchant's language.",
+   "step5_contract.py · notify.py", "Contracts in Postgres · Temporal durable timers · WhatsApp/app push templates", "none"],
+  ["Verify", "Event-driven predicate checks against the system of record (via MCP read tools, not the gateway response), a deadline timer, and reconcile() for lost events. All pass → CLOSED with a proof bundle.",
+   "step6_verify.py · event_bus.py · clock.py", "Kafka consumers · Temporal timers · versioned predicate registry", "none"],
+  ["If fail: remediate", "Fixed ladder: idempotent retry → quick re-check → chase owner with evidence → goodwill compensation → proactive delay message → human desk with proof pack → re-arm (max 2 cycles).",
+   "step7_remediate.py · human_desk.py", "Temporal workflow · ops ticketing (PagerDuty / internal console)", "none"],
+];
+const AROUND = [
+  ["Learning loop", "Verified closes update priors and P90s, playbook wins/attempts and autonomy; novel fixes become DRAFT playbooks for human approval; spike detection opens incidents (≥10 merchants, ≥5× baseline in 2h).", "learning.py", "Offline training jobs + feature store; streaming incident detection"],
+  ["Paytm systems of record (simulated)", "Devices, billing, ledger, finance queue, settlements, warehouse, payments + scheduled system events. Every log line tagged [sim].", "paytm_sim.py · seed.py · store.py", "Paytm's real billing / ledger / settlement / device-management services"],
+  ["Live backend log", "One-line structured logs from the real code path, 2,000-line ring buffer, polled every 500 ms. Mocked integrations say (mock).", "logger.py · trace.py", "OpenTelemetry logs + spans → Loki / Elastic"],
+  ["Virtual clock", "Lets 48 hours of rental batches, bank acks and promise deadlines pass in seconds, firing scheduled events in order.", "clock.py", "Temporal durable timers"],
+];
+const card = (i, s) => `<div class="card"><h3><span class="num" style="background:var(--cyan)">${i}</span>${s[0]}</h3>
+  <div class="small">${s[1]}</div><div class="row"><b>Prototype</b><span class="mono">${s[2]}</span></div>
+  <div class="row"><b>Production</b>${s[3]}</div>${s[4] ? `<div class="row"><b>AI</b>${s[4]}</div>` : ""}</div>`;
+document.getElementById("flow").innerHTML = STEPS.map((s, i) => card(i + 1, s)).join("");
+document.getElementById("around").innerHTML = AROUND.map((s) => card("∞", s)).join("");
+
+async function rpc(method, params) {
+  const r = await fetch("/mcp", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }) });
+  return r.json();
+}
+(async () => {
+  const init = await rpc("initialize", { protocolVersion: "2025-06-18", clientInfo: { name: "architecture-page" } });
+  const list = await rpc("tools/list");
+  const tools = list.result.tools;
+  document.getElementById("mcp-meta").textContent = `· live from ${init.result.serverInfo.name} v${init.result.serverInfo.version} · protocol ${init.result.protocolVersion} · ${tools.length} tools`;
+  document.getElementById("tools").innerHTML = tools.map((t) => `<div class="tool"><div class="nm">${t.name}
+    <span class="pill ${t.annotations.readOnlyHint ? "pass" : "fail"}">${t.annotations.readOnlyHint ? "read" : "write · token"}</span></div>
+    <div class="small muted">${t.description}</div>
+    <div class="tiny mono">(${Object.keys(t.inputSchema.properties).map((p) => t.inputSchema.required.includes(p) ? `<b>${p}</b>` : p).join(", ")})</div></div>`).join("");
+  const st = await (await fetch("/api/status")).json();
+  document.getElementById("badges").innerHTML = `<span class="badge ${st.sarvam}">Sarvam: ${st.sarvam}</span><span class="badge ${st.gemini}">Gemini: ${st.gemini}</span><span class="badge">MCP: ${st.mcp_transport}</span>`;
+})();
+</script>
+</body>
+</html>

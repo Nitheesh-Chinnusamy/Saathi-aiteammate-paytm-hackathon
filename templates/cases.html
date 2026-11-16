@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Saathi · Four everyday problems</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23002E6E'/%3E%3Ctext x='16' y='22' font-size='18' font-family='Arial' font-weight='700' fill='%2300B9F1' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='user.css') }}">
+  <style>
+    .cases { max-width: 1100px; margin: 0 auto; padding: 28px 18px 60px; }
+    .cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 16px; margin-top: 18px; }
+    .case { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; }
+    .case h2 { font-size: 19px; display: flex; gap: 10px; align-items: center; }
+    .case .num { width: 30px; height: 30px; border-radius: 50%; background: var(--cyan); color: #fff; display: grid; place-items: center; font-size: 15px; flex: none; }
+    .src { background: var(--surface); border: 1px dashed #B9C4D2; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+    .src b { color: var(--navy); }
+    .lbl { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .stepsrow { display: flex; flex-wrap: wrap; gap: 6px; }
+    .st { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: #E6F8FE; color: #0089B6; border: 1px solid #B5E9FA; }
+    .try2 { font-size: 13px; color: #3B4652; }
+    @media (max-width: 560px) { .cgrid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body class="u">
+<header class="uhead"><span class="wordmark">Saa<b>thi</b></span><span class="usub">Four everyday problems Saathi solves end to end</span>
+  <span style="flex:1"></span><a class="toplink" href="/">← Back to the demo</a></header>
+<div class="cases">
+  <h1>Four everyday problems</h1>
+  <p class="big-muted">Each card says why the problem happens, where it was reported, and which of Saathi's 7 steps fix it.</p>
+  <div class="cgrid" id="cgrid"></div>
+</div>
+<script>
+// Source title / date / link are PLACEHOLDERS to be filled in.
+const CASES = [
+  { title: "Customer says they paid, but no money or alert came", who: "Merchant", demo: "S6",
+    source: { title: "[Source title]", date: "[Date]", link: "#" },
+    why: "Fraudsters paste their own QR sticker over the shop's QR. The customer's money goes to a look-alike UPI ID, so the shop gets nothing and no Soundbox alert. The merchant can't tell by looking at the sticker.",
+    steps: ["1 Understand: amount ₹3,624 from the merchant's words", "2 Diagnose: ledger + payments in the last 15 min, then UTR lookup shows a different payee",
+            "3 Safety: QR replacement allowed (own QR)", "4 Act: old QR blocked, new QR ordered via the gateway",
+            "5 Contract: new QR + ₹1 test payment within 24h", "6 Verify: QR registry and test payment in Paytm's records"],
+    say: "Customer bol raha hai ₹3,624 pay kiya, mujhe alert nahi aaya" },
+  { title: "Money deducted, but the payment shows failed", who: "Customer", demo: "S7",
+    source: { title: "[Source title]", date: "[Date]", link: "#" },
+    why: "The payer's bank debits the money, but the receiving bank times out. Saathi targets the end of T+1. The RBI limit for failed payments to merchants is T+5; after that the customer gets ₹100 for every day of delay.",
+    steps: ["1 Understand: failed ₹9,700 payment, linked to the bank incident", "2 Diagnose: debited-not-credited at the receiving bank; guidance sent first",
+            "4 Act: reversal request raised", "5 Contract: target end of T+1 (RBI limit T+5)", "6 Verify: reversal seen in the bank's records",
+            "7 If late: chase the bank, escalate, notify; ₹100/day after T+5"],
+    say: "Paisa kat gaya par payment fail dikha raha hai, ₹9,700" },
+  { title: "\"What are these deductions?\"", who: "Merchant", demo: "S8",
+    source: { title: "[Source title]", date: "[Date]", link: "#" },
+    why: "Settlements, fees and rent all land in one account statement, so a wrong charge hides among normal ones and merchants can't tell which is which.",
+    steps: ["1 Understand: a question about the records", "2 Diagnose: every item explained line by line with record IDs",
+            "Rules flag any wrong charge → one-tap fix starts the full 7 steps"],
+    say: "Aaj ke deductions samjhao" },
+  { title: "Rent charged after the Soundbox was returned", who: "Merchant", demo: "S1",
+    source: { title: "[Source title]", date: "[Date]", link: "#" },
+    why: "The warehouse receives the device, but billing never gets the return event, so rent keeps getting deducted. Old tickets get closed when the merchant stops replying, not when the money comes back.",
+    steps: ["1 Understand: known incident, broken earlier promise → high priority", "2 Diagnose: data tests, 98% sure, no AI needed",
+            "3 Safety: all rules pass", "4 Act: stop rent + refund", "5 Contract: 48h from history",
+            "6 Verify: rent stopped + refund in the ledger", "7 If it fails: retry, chase, ₹50 goodwill, human fix"],
+    say: "నేను సౌండ్‌బాక్స్ తిరిగి ఇచ్చేశాను, అయినా రెంట్ కట్ అవుతూనే ఉంది." },
+];
+document.getElementById("cgrid").innerHTML = CASES.map((c, i) => `<div class="case">
+  <h2><span class="num">${i + 1}</span>${c.title}</h2>
+  <div class="small muted">${c.who} · demo ${c.demo}</div>
+  <div class="src"><span class="lbl">Source</span><br><b>${c.source.title}</b> · ${c.source.date} · <a href="${c.source.link}" target="_blank">${c.source.link === "#" ? "[link]" : c.source.link}</a></div>
+  <div><span class="lbl">Why it happens</span><div>${c.why}</div></div>
+  <div><span class="lbl">Saathi steps that solve it</span><div class="stepsrow">${c.steps.map((s) => `<span class="st">${s}</span>`).join("")}</div></div>
+  <div class="try2"><span class="lbl">Try saying</span><br>“${c.say}”</div></div>`).join("");
+</script>
+</body>
+</html>
